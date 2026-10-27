@@ -106,10 +106,10 @@ zurückliegt. Die Komponente folgt trotzdem dem Zähler der Fernbedienung und sp
 | Bedienung | Wirkung |
 |---|---|
 | Kanaltaste kurz | schaltet die Lampe dieses Kanals um |
-| Kanaltaste gehalten | dimmt diese Lampe; Richtung wechselt bei jedem Halten; ganzer Bereich ca. 2 s; eine Mindesthelligkeit bleibt |
+| Kanaltaste gehalten | dimmt diese Lampe; beginnt ca. 0,5 s nach dem Drücken (mit dem 2. Paket); Richtung wechselt bei jedem Halten; ganzer Bereich ca. 1 s; bleibt oben ca. 3 s / unten ca. 1 s stehen und kehrt dann um; eine Mindesthelligkeit bleibt |
 | mehrere Kanaltasten gehalten | dimmt diese Lampen gemeinsam |
 | Ein / Aus | alle Lampen ein / aus; Helligkeit bleibt gespeichert |
-| Sonne / Schneeflocke | Lichtfarbe, alle Lampen |
+| Sonne / Schneeflocke gehalten | Lichtfarbe aller Lampen, immer wärmer bzw. kälter bis zum Anschlag (keine Umkehr); ganzer Bereich ca. 1,2 s |
 
 ## Wie es gefunden wurde
 

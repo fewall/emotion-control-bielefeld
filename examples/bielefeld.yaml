@@ -38,7 +38,7 @@ ls_bielefeld:
   cs_pin: GPIO5
   remote_id: "12 34 56 78 9A BC DE F0"   # replace with the ID of YOUR remote
 
-# One light per connected lamp channel (1-4)
+# One dimmable light per connected lamp channel (1-4)
 light:
   - platform: ls_bielefeld
     name: "Channel 1"
@@ -49,6 +49,11 @@ light:
   - platform: ls_bielefeld
     name: "Channel 3"
     channel: 3
+
+# Colour temperature of all lamps, 0 % = coldest, 100 % = warmest
+number:
+  - platform: ls_bielefeld
+    name: "Colour temperature"
 
 # Key currently pressed on the real remote ("" when released)
 text_sensor:

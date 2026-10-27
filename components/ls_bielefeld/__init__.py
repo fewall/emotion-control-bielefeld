@@ -9,13 +9,15 @@ from esphome.components import spi
 from esphome.const import CONF_FREQUENCY, CONF_ID
 
 DEPENDENCIES = ["spi"]
-AUTO_LOAD = ["button", "light", "text_sensor"]
+AUTO_LOAD = ["button", "light", "number", "text_sensor"]
 MULTI_CONF = False
 
 CONF_LS_BIELEFELD_ID = "ls_bielefeld_id"
 CONF_REMOTE_ID = "remote_id"
 CONF_DEVIATION = "deviation"
 CONF_REPEATS = "repeats"
+CONF_DIM_TIME = "dim_time"
+CONF_COLOR_TIME = "color_time"
 
 # Bit in payload byte 1, determined from captures (order sun, snowflake, 1..4, on, off).
 KEYS = {
@@ -62,6 +64,17 @@ CONFIG_SCHEMA = (
             ),
             # Copies of each frame on air (the remote sends ~4-8).
             cv.Optional(CONF_REPEATS, default=6): cv.int_range(min=1, max=15),
+            # Time the control needs to dim from maximum to minimum while a channel
+            # key is held (after its ~0.5 s start delay). Used for brightness values.
+            cv.Optional(CONF_DIM_TIME, default="1000ms"): cv.All(
+                cv.positive_time_period_milliseconds,
+                cv.Range(min=cv.TimePeriod(milliseconds=200), max=cv.TimePeriod(seconds=10)),
+            ),
+            # Same for the colour temperature (sun / snowflake held), coldest to warmest.
+            cv.Optional(CONF_COLOR_TIME, default="1200ms"): cv.All(
+                cv.positive_time_period_milliseconds,
+                cv.Range(min=cv.TimePeriod(milliseconds=200), max=cv.TimePeriod(seconds=10)),
+            ),
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -78,3 +91,5 @@ async def to_code(config):
     cg.add(var.set_frequency_hz(config[CONF_FREQUENCY]))
     cg.add(var.set_deviation_hz(config[CONF_DEVIATION]))
     cg.add(var.set_repeats(config[CONF_REPEATS]))
+    cg.add(var.set_dim_time_ms(config[CONF_DIM_TIME]))
+    cg.add(var.set_color_time_ms(config[CONF_COLOR_TIME]))

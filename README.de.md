@@ -17,7 +17,8 @@ Projekt ist daraus entstanden und dokumentiert das dazu nicht kompatible Bielefe
 
 ## Funktionen
 
-- **Lampen als Lichter:** jeder Kanal (1–4) erscheint als Licht mit Ein/Aus.
+- **Lampen als dimmbare Lichter:** jeder Kanal (1–4) erscheint als Licht mit Ein/Aus und Helligkeit.
+- **Farbtemperatur** aller Lampen als Zahl 0–100 % (0 = am kältesten, 100 = am wärmsten).
 - **Alle Ein / Alle Aus, Wärmer / Kälter** als Buttons.
 - **Dimmen:** Buttons, die eine Taste eine einstellbare Zeit „halten“, auch für mehrere Kanäle gleichzeitig.
 - **Abgleich mit der Fernbedienung:** Tastendrücke der echten Fernbedienung werden empfangen, die
@@ -92,6 +93,10 @@ light:
     name: "Schrank Kanal 1"
     channel: 1
 
+number:
+  - platform: ls_bielefeld
+    name: "Farbtemperatur"
+
 button:
   - platform: ls_bielefeld
     name: "Alle Aus"
@@ -110,7 +115,10 @@ button:
 | | `frequency` | `2433.0MHz` | Trägerfrequenz |
 | | `deviation` | `38kHz` | Frequenzhub beim Senden |
 | | `repeats` | `6` | Wiederholungen jedes Pakets |
+| | `dim_time` | `1000ms` | Zeit der Steuerung von maximaler bis minimaler Helligkeit bei gehaltener Kanaltaste |
+| | `color_time` | `1200ms` | dasselbe für die Farbtemperatur, von kalt bis warm |
 | `light` | `channel` | – | Lampenkanal 1–4 |
+| `number` | – | – | Farbtemperatur aller Lampen, 0–100 % |
 | `button` | `key` | – | `sonne`, `schneeflocke`, `kanal_1` … `kanal_4`, `ein`, `aus` oder eine Liste gleichzeitig gedrückter Tasten |
 | | `hold` | `0ms` | 0 = kurz drücken, sonst Haltedauer (max. 10 s) |
 | `text_sensor` | – | – | aktuell auf der echten Fernbedienung gedrückte Taste, leer nach dem Loslassen |
@@ -118,10 +126,12 @@ button:
 ## So verhält sich die Steuerung
 
 - **Kanaltaste kurz:** schaltet diese Lampe um. **Gehalten:** dimmt; die Richtung wechselt bei jedem
-  Halten. Der ganze Bereich dauert ca. 2 s. Die Lampen behalten eine Mindesthelligkeit und merken sich
-  die Helligkeit beim Ausschalten.
+  Halten. Es geht ca. 0,5 s nach dem Drücken los, der ganze Bereich dauert dann ca. 1 s. An beiden
+  Enden bleibt die Helligkeit kurz stehen (oben ≈3 s, unten ≈1 s) und kehrt dann um. Die Lampen
+  behalten eine Mindesthelligkeit und merken sich die Helligkeit beim Ausschalten.
 - **Ein / Aus:** immer alle Lampen.
-- **Sonne / Schneeflocke:** Lichtfarbe aller Lampen.
+- **Sonne / Schneeflocke:** Lichtfarbe aller Lampen; gehalten immer wärmer bzw. kälter bis zum
+  Anschlag (keine Umkehr).
 - Die Steuerung prüft den Zähler **nicht streng**: Nachdem der ESP32 gesendet hat, funktioniert die
   echte Fernbedienung weiter.
 
@@ -129,8 +139,11 @@ button:
 
 - **Keine Rückmeldung von der Steuerung.** Die Lampenzustände sind eine Schätzung aus allem, was der
   ESP32 sendet und empfängt. Stimmt sie nicht (Stromausfall, verpasstes Paket), gleicht „Alle Aus“ sie ab.
-- **Helligkeit noch nicht als Schieberegler:** Die Dimmrichtung wechselt, daher gibt es vorerst nur
-  relative „Halten“-Buttons.
+- **Auch Helligkeit und Farbtemperatur sind Schätzungen.** Ein neuer Wert wird durch Halten einer
+  Taste für eine berechnete Zeit erreicht; die Komponente merkt sich die wechselnde Dimmrichtung.
+  Ginge das nächste Halten in die falsche Richtung, fährt sie erst an den Anschlag. 100 % / 1 %
+  (bzw. 0 % / 100 % Farbe) fahren immer an den Anschlag und gleichen die Schätzung ab. Passen die
+  Werte nicht, `dim_time` / `color_time` anpassen.
 - Der Sendehub (38 kHz) ist TIs SmartRF-Standardwert für 10 kBaud und funktioniert hier, wurde an der
   Original-Fernbedienung aber nicht gemessen.
 

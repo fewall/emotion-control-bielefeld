@@ -17,7 +17,8 @@ started from it and documents the Bielefeld protocol, which is not compatible.
 
 ## Features
 
-- **Lamps as lights:** each channel (1–4) appears as an on/off light.
+- **Lamps as dimmable lights:** each channel (1–4) appears as a light with on/off and brightness.
+- **Colour temperature** of all lamps as a 0–100 % number (0 = coldest, 100 = warmest).
 - **All on / all off, warmer / colder** as buttons.
 - **Dimming:** "hold key" buttons with a configurable hold time, also for several channels at once.
 - **Remote sync:** keys pressed on the real remote are received; the lamp states follow and the
@@ -92,6 +93,10 @@ light:
     name: "Cabinet channel 1"
     channel: 1
 
+number:
+  - platform: ls_bielefeld
+    name: "Colour temperature"
+
 button:
   - platform: ls_bielefeld
     name: "All off"
@@ -110,7 +115,10 @@ button:
 | | `frequency` | `2433.0MHz` | carrier frequency |
 | | `deviation` | `38kHz` | transmit FSK deviation |
 | | `repeats` | `6` | copies of each frame on air |
+| | `dim_time` | `1000ms` | time the control takes from max. to min. brightness while a channel key is held |
+| | `color_time` | `1200ms` | same for the colour temperature, coldest to warmest |
 | `light` | `channel` | – | lamp channel 1–4 |
+| `number` | – | – | colour temperature of all lamps, 0–100 % |
 | `button` | `key` | – | `sonne`, `schneeflocke`, `kanal_1` … `kanal_4`, `ein`, `aus`, or a list of keys pressed together |
 | | `hold` | `0ms` | 0 = short press, otherwise how long the key is held (max. 10 s) |
 | `text_sensor` | – | – | key currently pressed on the real remote, empty when released |
@@ -121,9 +129,12 @@ snowflake/colder, `ein` = on, `aus` = off, `kanal` = channel).
 ## How the control unit behaves
 
 - **Channel key, short:** toggles that lamp. **Held:** dims; the direction reverses with every hold.
-  Full range takes about 2 s. Lamps keep a minimum brightness and remember it when switched off.
+  It starts ~0.5 s after pressing; the full range then takes about 1 s. At either end it stays for
+  a moment (≈3 s at max., ≈1 s at min.) and then reverses. Lamps keep a minimum brightness and
+  remember it when switched off.
 - **On / Off:** always all lamps.
-- **Sun / snowflake:** colour temperature of all lamps.
+- **Sun / snowflake:** colour temperature of all lamps; held, they always go warmer / colder and stop
+  at the end (no reversal).
 - The control unit does **not** check the rolling counter strictly: after the ESP32 sent, the real
   remote keeps working.
 
@@ -131,8 +142,11 @@ snowflake/colder, `ein` = on, `aus` = off, `kanal` = channel).
 
 - **No feedback from the control unit.** Lamp states are an estimate based on everything the ESP32
   sends and receives. If it is wrong (power cut, missed frame), "All off" re-syncs it.
-- **Brightness is not a slider yet:** the dimming direction alternates, so only relative
-  "hold" buttons are offered.
+- **Brightness and colour temperature are estimates, too.** A new value is reached by holding a key
+  for a calculated time; the component keeps track of the alternating dimming direction. If the
+  wrong way is next, it first runs into the end. Values of 100 % / 1 % (or 0 % / 100 % colour)
+  always run into the end and re-sync the estimate. Tune `dim_time` / `color_time` if values are
+  off.
 - The transmit deviation (38 kHz) is TI's SmartRF default for 10 kBaud and works here, but was not
   measured on the original remote.
 

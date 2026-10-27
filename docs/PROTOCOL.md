@@ -106,10 +106,10 @@ nevertheless follows the remote's counter and stores it in flash.
 | Action | Effect |
 |---|---|
 | channel key, short | toggles the lamp on that channel |
-| channel key, held | dims that lamp; direction alternates with every hold; full range ~2 s; a minimum brightness remains |
+| channel key, held | dims that lamp; starts ~0.5 s after pressing (with the 2nd frame); direction alternates with every hold; full range ~1 s; stays ~3 s at max. / ~1 s at min., then reverses; a minimum brightness remains |
 | several channel keys held | dims these lamps together |
 | on / off | all lamps on / off; brightness is remembered |
-| sun / snowflake | colour temperature, all lamps |
+| sun / snowflake, held | colour temperature of all lamps, always warmer / colder, stops at the end (no reversal); full range ~1.2 s |
 
 ## How it was found
 

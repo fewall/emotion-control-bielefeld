@@ -43,6 +43,44 @@ static const int RSSI_OFFSET = 72;
 static const uint32_t HOLD_STEP_MS = 500;
 static const uint32_t SHORT_RELEASE_DELAY_MS = 150;
 static const uint8_t STEP_COPIES = 3;
+// Pause between two emulated presses, so the control sees them as separate presses.
+static const uint32_t PRESS_GAP_MS = 250;
+
+// Behaviour of the control while a key is held, measured from videos:
+// it starts changing only with the second frame (~0.5 s after pressing), and when a
+// held channel key reaches an end it stays there for a while before reversing.
+static const uint32_t HOLD_DELAY_MS = 500;
+static const float DWELL_MAX_MS = 3000.0f;
+static const float DWELL_MIN_MS = 1000.0f;
+// Extra hold time when an end is the goal - lands safely inside the dwell at that end.
+static const uint32_t END_MARGIN_MS = 300;
+static const float LEVEL_TOLERANCE = 0.03f;
+static const float MIN_PUBLISHED_BRIGHTNESS = 0.01f;
+static const uint32_t DEBOUNCE_MS = 300;
+
+static float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
+
+// Dimming of one channel while its key is held for active_ms (after the initial delay).
+static void simulate_dim(ChannelModel &m, float active_ms, float ramp_ms) {
+  bool up = m.next_up;
+  float t = active_ms;
+  for (int guard = 0; guard < 20; guard++) {
+    const float to_end = (up ? 1.0f - m.level : m.level) * ramp_ms;
+    if (t <= to_end) {
+      m.level += (up ? t : -t) / ramp_ms;
+      break;
+    }
+    t -= to_end;
+    m.level = up ? 1.0f : 0.0f;
+    const float dwell = up ? DWELL_MAX_MS : DWELL_MIN_MS;
+    if (t <= dwell)
+      break;
+    t -= dwell;
+    up = !up;
+  }
+  m.level = clamp01(m.level);
+  m.next_up = !up;
+}
 
 std::string LSBielefeld::key_name(uint8_t key) {
   static const char *const NAMES[8] = {"Sonne", "Schneeflocke", "Kanal 1", "Kanal 2",
@@ -227,6 +265,13 @@ void LSBielefeld::setup() {
     this->counter_ = stored;
     this->counter_known_ = true;
   }
+  this->color_pref_ = global_preferences->make_preference<float>(fnv1_hash("ls_bielefeld_color"));
+  float color = 1.0f;
+  if (this->color_pref_.load(&color) && color >= 0.0f && color <= 1.0f)
+    this->color_ = color;
+  if (this->color_number_ != nullptr)
+    this->color_number_->publish_state(roundf(this->color_ * 100.0f));
+
   this->restart_rx_();
   this->publish_key_("");
 }
@@ -250,27 +295,153 @@ static const uint8_t KEY_AUS = 0x80;
 static const uint8_t CHANNEL_KEYS[4] = {0x04, 0x08, 0x10, 0x20};
 static const uint32_t PRESS_TIMEOUT_MS = 1500;
 
-void LSBielefeld::apply_key_effect_(uint8_t key, bool held) {
+static const uint8_t KEY_SONNE = 0x01;
+static const uint8_t KEY_SCHNEE = 0x02;
+
+void LSBielefeld::apply_key_effect_(uint8_t key, uint32_t hold_ms) {
+  const bool held = hold_ms >= HOLD_DELAY_MS;
+  const float active = held ? static_cast<float>(hold_ms - HOLD_DELAY_MS) : 0.0f;
   for (int i = 0; i < 4; i++) {
-    LSChannelLight *l = this->lights_[i];
-    if (l == nullptr)
-      continue;
+    ChannelModel &m = this->channels_[i];
     if (key & KEY_EIN) {
-      l->set_estimate(true);
+      m.on = true;  // brightness is remembered by the control
     } else if (key & KEY_AUS) {
-      l->set_estimate(false);
+      m.on = false;
     } else if (key & CHANNEL_KEYS[i]) {
-      // Short press toggles the channel, holding it dims - which needs the lamp on.
-      l->set_estimate(held ? true : !l->estimate());
+      if (held) {
+        m.on = true;  // dimming needs the lamp on
+        simulate_dim(m, active, static_cast<float>(this->dim_time_ms_));
+      } else {
+        m.on = !m.on;  // short press toggles the channel
+      }
     }
   }
+  // Colour temperature: no change of direction, it just stops at either end.
+  if (held && (key & (KEY_SONNE | KEY_SCHNEE)) && !(key & KEY_SONNE && key & KEY_SCHNEE)) {
+    const float step = active / static_cast<float>(this->color_time_ms_);
+    this->color_ = clamp01(this->color_ + ((key & KEY_SONNE) ? step : -step));
+    this->color_pref_.save(&this->color_);
+  }
+  if (!this->batch_)
+    this->publish_models_();
+}
+
+void LSBielefeld::publish_models_() {
+  for (int i = 0; i < 4; i++)
+    if (this->lights_[i] != nullptr)
+      this->lights_[i]->set_estimate(this->channels_[i].on, this->channels_[i].level);
+  if (this->color_number_ != nullptr) {
+    const float value = roundf(this->color_ * 100.0f);
+    if (!this->color_number_->has_state() || this->color_number_->state != value)
+      this->color_number_->publish_state(value);
+  }
+}
+
+void LSBielefeld::adopt_channel(uint8_t channel, bool on, float brightness) {
+  if (channel < 1 || channel > 4)
+    return;
+  ChannelModel &m = this->channels_[channel - 1];
+  m.on = on;
+  m.level = brightness <= MIN_PUBLISHED_BRIGHTNESS ? 0.0f : clamp01(brightness);
+  // Unknown after a reboot. At an end the direction is clear; in between, the
+  // first hold after switching on was "down" in every test.
+  m.next_up = m.level <= 0.0f;
+}
+
+void LSBielefeld::request_channel(uint8_t channel, bool on, float brightness) {
+  if (channel < 1 || channel > 4)
+    return;
+  const int i = channel - 1;
+  const ChannelModel &m = this->channels_[i];
+  const float level = brightness <= MIN_PUBLISHED_BRIGHTNESS ? 0.0f : clamp01(brightness);
+  PendingTarget &p = this->pending_[i];
+  if (on == m.on && (!on || fabsf(level - m.level) < 0.005f)) {
+    p.active = false;  // matches the model, e.g. our own published estimate
+    return;
+  }
+  p.active = true;
+  p.on = on;
+  p.value = level;
+  p.since_ms = millis();
+}
+
+void LSBielefeld::request_color(float warmth) {
+  warmth = clamp01(warmth);
+  if (fabsf(warmth - this->color_) < 0.005f) {
+    this->color_pending_.active = false;
+    this->publish_models_();
+    return;
+  }
+  this->color_pending_.active = true;
+  this->color_pending_.value = warmth;
+  this->color_pending_.since_ms = millis();
+}
+
+void LSBielefeld::apply_channel_target_(int i, bool on, float target) {
+  const uint8_t key = CHANNEL_KEYS[i];
+  ChannelModel &m = this->channels_[i];
+  const float ramp = static_cast<float>(this->dim_time_ms_);
+  this->batch_ = true;
+  if (!on) {
+    if (m.on)
+      this->press(key, 0);
+  } else {
+    if (!m.on)
+      this->press(key, 0);  // switch on, the control restores the last brightness
+    const bool to_end = target >= 0.99f || target <= 0.01f;
+    if (to_end)
+      target = target >= 0.99f ? 1.0f : 0.0f;
+    const float delta = target - m.level;
+    if (fabsf(delta) >= LEVEL_TOLERANCE || (to_end && delta != 0.0f)) {
+      const bool want_up = delta > 0.0f;
+      if (m.next_up != want_up) {
+        // The next hold would go the wrong way: run it into its end first.
+        // That also re-synchronises the model.
+        const float dist = m.next_up ? 1.0f - m.level : m.level;
+        this->press(key, HOLD_DELAY_MS + static_cast<uint32_t>(dist * ramp) + END_MARGIN_MS);
+      }
+      const float dist = fabsf(target - m.level);
+      uint32_t hold = HOLD_DELAY_MS + static_cast<uint32_t>(dist * ramp);
+      if (to_end)
+        hold += END_MARGIN_MS;
+      if (dist > 0.0f)
+        this->press(key, hold);
+    }
+  }
+  this->batch_ = false;
+  ESP_LOGI(TAG, "Kanal %d -> %s, Helligkeit ~%.0f%%", i + 1, m.on ? "an" : "aus", m.level * 100.0f);
+  this->publish_models_();
+}
+
+void LSBielefeld::apply_color_target_(float target) {
+  const float ramp = static_cast<float>(this->color_time_ms_);
+  const bool to_end = target >= 0.99f || target <= 0.01f;
+  if (to_end)
+    target = target >= 0.99f ? 1.0f : 0.0f;
+  const float delta = target - this->color_;
+  if (fabsf(delta) >= LEVEL_TOLERANCE || (to_end && delta != 0.0f)) {
+    uint32_t hold = HOLD_DELAY_MS + static_cast<uint32_t>(fabsf(delta) * ramp);
+    if (to_end)
+      hold += END_MARGIN_MS;
+    this->batch_ = true;
+    this->press(delta > 0.0f ? KEY_SONNE : KEY_SCHNEE, hold);
+    this->batch_ = false;
+  }
+  ESP_LOGI(TAG, "Farbtemperatur -> ~%.0f%% warm", this->color_ * 100.0f);
+  this->publish_models_();
 }
 
 void LSBielefeld::finish_remote_press_() {
   if (!this->rx_press_open_)
     return;
   this->rx_press_open_ = false;
-  this->apply_key_effect_(this->rx_pressed_key_, this->rx_press_held_);
+  uint32_t hold_ms = 0;
+  if (this->rx_press_held_) {
+    hold_ms = this->rx_last_frame_ms_ - this->rx_press_start_ms_;
+    if (hold_ms < HOLD_DELAY_MS)
+      hold_ms = HOLD_DELAY_MS;
+  }
+  this->apply_key_effect_(this->rx_pressed_key_, hold_ms);
 }
 
 void LSBielefeld::press(uint8_t key, uint32_t hold_ms, bool update_lights) {
@@ -294,7 +465,10 @@ void LSBielefeld::press(uint8_t key, uint32_t hold_ms, bool update_lights) {
   this->pref_.save(&this->counter_);
   const uint16_t cnt = this->counter_;
 
-  const uint32_t start = millis();
+  // Presses queued back to back must not overlap on air.
+  uint32_t start = millis();
+  if (static_cast<int32_t>(this->tx_free_at_ms_ - start) > 0)
+    start = this->tx_free_at_ms_;
   uint8_t seq = 0;
   for (uint8_t i = 0; i < this->repeats_; i++)
     this->queue_.push_back({key, cnt, seq, start});
@@ -308,10 +482,15 @@ void LSBielefeld::press(uint8_t key, uint32_t hold_ms, bool update_lights) {
   const uint32_t release_at = start + (hold_ms > 0 ? hold_ms : SHORT_RELEASE_DELAY_MS);
   for (uint8_t i = 0; i < STEP_COPIES; i++)
     this->queue_.push_back({0x00, cnt, seq, release_at});
+  this->tx_free_at_ms_ = release_at + PRESS_GAP_MS;
 
-  ESP_LOGI(TAG, "Sending %s%s (counter %u)", key_name(key).c_str(), hold_ms > 0 ? " (gehalten)" : "", cnt);
+  if (hold_ms > 0) {
+    ESP_LOGI(TAG, "Sending %s (gehalten %u ms, counter %u)", key_name(key).c_str(), (unsigned) hold_ms, cnt);
+  } else {
+    ESP_LOGI(TAG, "Sending %s (counter %u)", key_name(key).c_str(), cnt);
+  }
   if (update_lights)
-    this->apply_key_effect_(key, hold_ms > 0);
+    this->apply_key_effect_(key, hold_ms);
 }
 
 void LSBielefeld::send_frame_(const TxFrame &f) {
@@ -340,8 +519,24 @@ void LSBielefeld::loop() {
     return;
   const uint32_t now = millis();
 
-  if (this->rx_press_open_ && now - this->rx_last_frame_ms_ > PRESS_TIMEOUT_MS)
-    this->finish_remote_press_();  // release frame was not received
+  if (this->rx_press_open_ && now - this->rx_last_frame_ms_ > PRESS_TIMEOUT_MS) {
+    this->rx_last_frame_ms_ += 250;  // release frame was not received: assume it came soon after
+    this->finish_remote_press_();
+  }
+
+  // Requested targets, debounced so a slider being dragged does not queue many presses.
+  for (int i = 0; i < 4; i++) {
+    PendingTarget &p = this->pending_[i];
+    if (p.active && now - p.since_ms >= DEBOUNCE_MS && this->queue_.size() < 60) {
+      p.active = false;
+      this->apply_channel_target_(i, p.on, p.value);
+    }
+  }
+  if (this->color_pending_.active && now - this->color_pending_.since_ms >= DEBOUNCE_MS &&
+      this->queue_.size() < 60) {
+    this->color_pending_.active = false;
+    this->apply_color_target_(this->color_pending_.value);
+  }
 
   if (this->transmitting_) {
     // A 14-byte frame at 10 kBaud takes ~20 ms on air.
@@ -447,6 +642,7 @@ void LSBielefeld::handle_frame_(const uint8_t *p, int rssi) {
     this->rx_pressed_key_ = key;
     this->rx_press_open_ = true;
     this->rx_press_held_ = false;
+    this->rx_press_start_ms_ = this->rx_last_frame_ms_;
     const std::string name = key_name(key);
     ESP_LOGI(TAG, "Remote: %s (counter %u, %d dBm)", name.c_str(), cnt, rssi);
     this->publish_key_(name.c_str());
@@ -490,33 +686,37 @@ void LSBielefeld::dump_config() {
 }
 
 void LSChannelLight::write_state(light::LightState *state) {
-  bool on;
-  state->current_values_as_binary(&on);
+  if (this->parent_ == nullptr)
+    return;
+  // Use the requested target, not the values of a running transition.
+  const auto &v = state->remote_values;
+  const bool on = v.is_on();
+  const float brightness = v.get_brightness();
   if (!this->initialized_) {
-    // First write right after boot restores the last known state: adopt it, do not transmit.
     this->initialized_ = true;
     if (millis() < 15000) {
-      this->estimated_ = on;
+      // First write right after boot restores the last known state: adopt it, do not transmit.
+      this->parent_->adopt_channel(this->channel_, on, brightness);
       return;
     }
   }
-  if (on == this->estimated_)
-    return;  // nothing to do (also the case when the hub itself published the change)
-  this->estimated_ = on;
-  if (this->parent_ != nullptr)
-    this->parent_->press(CHANNEL_KEYS[this->channel_ - 1], 0, false);  // channel key toggles the lamp
+  this->parent_->request_channel(this->channel_, on, brightness);
 }
 
-void LSChannelLight::set_estimate(bool on) {
+void LSChannelLight::set_estimate(bool on, float level) {
   this->initialized_ = true;
-  if (on == this->estimated_)
+  if (this->state_ == nullptr)
     return;
-  this->estimated_ = on;
-  if (this->state_ != nullptr) {
-    auto call = this->state_->make_call();
-    call.set_state(on);
-    call.perform();
-  }
+  const float brightness = level < MIN_PUBLISHED_BRIGHTNESS ? MIN_PUBLISHED_BRIGHTNESS : level;
+  const auto &v = this->state_->remote_values;
+  if (v.is_on() == on && (!on || fabsf(v.get_brightness() - brightness) < 0.005f))
+    return;
+  auto call = this->state_->make_call();
+  call.set_state(on);
+  if (on)
+    call.set_brightness(brightness);
+  call.set_transition_length(0);
+  call.perform();
 }
 
 }  // namespace ls_bielefeld
