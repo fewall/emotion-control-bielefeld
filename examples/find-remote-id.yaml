@@ -1,0 +1,36 @@
+# Step 1: find the ID of your remote.
+# Flash this, press any key on the remote and look in the log for
+#   Remote found - remote_id: 12 34 56 78 9A BC DE F0: Ein (counter 530, -46 dBm)
+esphome:
+  name: ls-bielefeld
+  friendly_name: L&S Bielefeld
+
+esp32:
+  variant: esp32
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source: github://fewall/emotion-control-bielefeld
+    components: [ls_bielefeld]
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+ls_bielefeld:
+  cs_pin: GPIO5
+  # no remote_id: listen only and log every remote that is heard

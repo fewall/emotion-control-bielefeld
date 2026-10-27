@@ -1,0 +1,36 @@
+# Diagnostic: raw capture triggered on the preamble (see docs/TOOLS.md).
+# Do not combine with ls_bielefeld or cc2500_scanner - they share the CC2500.
+esphome:
+  name: cc2500-capture
+
+esp32:
+  variant: esp32
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source: github://fewall/emotion-control-bielefeld
+    components: [cc2500_capture]
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+cc2500_capture:
+  cs_pin: GPIO5
+  frequency: 2433.0MHz   # take it from the scanner
+  profile: -1            # -1 = cycle through all 10 profiles, 0..9 = fixed profile
+  profile_time: 20s

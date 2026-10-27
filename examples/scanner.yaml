@@ -1,0 +1,35 @@
+# Diagnostic: 2.4 GHz spectrum scanner (see docs/TOOLS.md).
+# Do not combine with ls_bielefeld or cc2500_capture - they share the CC2500.
+esphome:
+  name: cc2500-scanner
+
+esp32:
+  variant: esp32
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source: github://fewall/emotion-control-bielefeld
+    components: [cc2500_scanner]
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+cc2500_scanner:
+  cs_pin: GPIO5
+  report_interval: 5s
+  dwell_time: 300us
