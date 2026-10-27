@@ -56,6 +56,8 @@ static const float DWELL_MIN_MS = 1000.0f;
 static const uint32_t END_MARGIN_MS = 300;
 static const float LEVEL_TOLERANCE = 0.03f;
 static const float MIN_PUBLISHED_BRIGHTNESS = 0.01f;
+// Requested values this close to an end (e.g. 1 % = 3/255) mean "run into that end".
+static const float END_THRESHOLD = 0.02f;
 static const uint32_t DEBOUNCE_MS = 300;
 
 static float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
@@ -342,7 +344,7 @@ void LSBielefeld::adopt_channel(uint8_t channel, bool on, float brightness) {
     return;
   ChannelModel &m = this->channels_[channel - 1];
   m.on = on;
-  m.level = brightness <= MIN_PUBLISHED_BRIGHTNESS ? 0.0f : clamp01(brightness);
+  m.level = brightness <= END_THRESHOLD ? 0.0f : clamp01(brightness);
   // Unknown after a reboot. At an end the direction is clear; in between, the
   // first hold after switching on was "down" in every test.
   m.next_up = m.level <= 0.0f;
@@ -353,7 +355,7 @@ void LSBielefeld::request_channel(uint8_t channel, bool on, float brightness) {
     return;
   const int i = channel - 1;
   const ChannelModel &m = this->channels_[i];
-  const float level = brightness <= MIN_PUBLISHED_BRIGHTNESS ? 0.0f : clamp01(brightness);
+  const float level = brightness <= END_THRESHOLD ? 0.0f : clamp01(brightness);
   PendingTarget &p = this->pending_[i];
   if (on == m.on && (!on || fabsf(level - m.level) < 0.005f)) {
     p.active = false;  // matches the model, e.g. our own published estimate
@@ -388,9 +390,9 @@ void LSBielefeld::apply_channel_target_(int i, bool on, float target) {
   } else {
     if (!m.on)
       this->press(key, 0);  // switch on, the control restores the last brightness
-    const bool to_end = target >= 0.99f || target <= 0.01f;
+    const bool to_end = target >= 1.0f - END_THRESHOLD || target <= END_THRESHOLD;
     if (to_end)
-      target = target >= 0.99f ? 1.0f : 0.0f;
+      target = target >= 1.0f - END_THRESHOLD ? 1.0f : 0.0f;
     const float delta = target - m.level;
     if (fabsf(delta) >= LEVEL_TOLERANCE || (to_end && delta != 0.0f)) {
       const bool want_up = delta > 0.0f;
@@ -415,9 +417,9 @@ void LSBielefeld::apply_channel_target_(int i, bool on, float target) {
 
 void LSBielefeld::apply_color_target_(float target) {
   const float ramp = static_cast<float>(this->color_time_ms_);
-  const bool to_end = target >= 0.99f || target <= 0.01f;
+  const bool to_end = target >= 1.0f - END_THRESHOLD || target <= END_THRESHOLD;
   if (to_end)
-    target = target >= 0.99f ? 1.0f : 0.0f;
+    target = target >= 1.0f - END_THRESHOLD ? 1.0f : 0.0f;
   const float delta = target - this->color_;
   if (fabsf(delta) >= LEVEL_TOLERANCE || (to_end && delta != 0.0f)) {
     uint32_t hold = HOLD_DELAY_MS + static_cast<uint32_t>(fabsf(delta) * ramp);
