@@ -36,6 +36,11 @@ started from it and documents the Bielefeld protocol, which is not compatible.
 | Radio | 2433.0 MHz, 2-FSK, ~10 kBaud | 2436.2 MHz, MSK, 250 kBaud |
 | Microcontroller in remote | STM8L101 | PIC16F1503 |
 
+<img src="docs/images/remote-front.jpg" width="200" alt="Bielefeld remote with 8 buttons">
+<img src="docs/images/pcb-front.jpg" width="200" alt="Remote PCB, component side">
+
+More photos of the remote and its PCB: [docs/PROTOCOL.md](docs/PROTOCOL.md#hardware-of-the-remote).
+
 Not sure? Flash the [spectrum scanner](docs/TOOLS.md) and press a button: Bielefeld shows up
 around 2433 MHz.
 

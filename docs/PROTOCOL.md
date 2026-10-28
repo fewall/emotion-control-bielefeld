@@ -17,6 +17,11 @@ frames; 419 of them passed the CC2500 hardware CRC.
 | Programming pads | 4 holes, 1.27 mm pitch, next to the MCU: VDD, SWIM, GND, NRST (square pad = VDD) |
 | Battery | CR2032 |
 
+| | | |
+|---|---|---|
+| <img src="images/remote-front.jpg" width="230"><br>Remote | <img src="images/pcb-front.jpg" width="230"><br>PCB, component side | <img src="images/pcb-back.jpg" width="230"><br>PCB, back |
+| <img src="images/remote-parts.jpg" width="230"><br>Opened: PCB, battery holder, case, key mat | <img src="images/pcb-mcu-swim-pads.jpg" width="230"><br>STM8L101 and the 4 programming pads (left) | <img src="images/mcu-marking.jpg" width="230"><br>MCU marking `L1S3` = STM8L101F3U6 |
+
 ## Radio parameters
 
 | Parameter | Value |

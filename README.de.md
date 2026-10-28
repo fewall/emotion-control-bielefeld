@@ -36,6 +36,11 @@ Projekt ist daraus entstanden und dokumentiert das dazu nicht kompatible Bielefe
 | Funk | 2433,0 MHz, 2-FSK, ca. 10 kBaud | 2436,2 MHz, MSK, 250 kBaud |
 | Mikrocontroller in der Fernbedienung | STM8L101 | PIC16F1503 |
 
+<img src="docs/images/remote-front.jpg" width="200" alt="Bielefeld-Fernbedienung mit 8 Tasten">
+<img src="docs/images/pcb-front.jpg" width="200" alt="Platine der Fernbedienung, Bestückungsseite">
+
+Weitere Fotos der Fernbedienung und ihrer Platine: [docs/PROTOCOL.de.md](docs/PROTOCOL.de.md#hardware-der-fernbedienung).
+
 Unsicher? Den [Spektrumscanner](docs/TOOLS.de.md) flashen und eine Taste drücken: Bielefeld
 taucht um 2433 MHz auf.
 

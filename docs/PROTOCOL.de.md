@@ -17,6 +17,11 @@ mitgeschnittenen Paketen geprüft; 419 davon bestanden die Hardware-CRC des CC25
 | Programmier-Pads | 4 Löcher, 1,27 mm Raster, neben dem Mikrocontroller: VDD, SWIM, GND, NRST (eckiges Pad = VDD) |
 | Batterie | CR2032 |
 
+| | | |
+|---|---|---|
+| <img src="images/remote-front.jpg" width="230"><br>Fernbedienung | <img src="images/pcb-front.jpg" width="230"><br>Platine, Bestückungsseite | <img src="images/pcb-back.jpg" width="230"><br>Platine, Rückseite |
+| <img src="images/remote-parts.jpg" width="230"><br>Geöffnet: Platine, Batteriehalter, Gehäuse, Tastenmatte | <img src="images/pcb-mcu-swim-pads.jpg" width="230"><br>STM8L101 und die 4 Programmier-Pads (links) | <img src="images/mcu-marking.jpg" width="230"><br>Aufdruck `L1S3` = STM8L101F3U6 |
+
 ## Funkparameter
 
 | Parameter | Wert |
