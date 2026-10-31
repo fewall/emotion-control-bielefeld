@@ -138,6 +138,8 @@ snowflake/colder, `ein` = on, `aus` = off, `kanal` = channel).
   It starts ~0.5 s after pressing; the full range then takes about 1 s. At either end it stays for
   a moment (≈3 s at max., ≈1 s at min.) and then reverses. Lamps keep a minimum brightness and
   remember it when switched off.
+- **Several channel keys at once** (one frame with several bits) act on all of them. The component
+  uses this when several lights are switched together, e.g. by an Alexa group.
 - **On / Off:** always all lamps.
 - **Sun / snowflake:** colour temperature of all lamps; held, they always go warmer / colder and stop
   at the end (no reversal).

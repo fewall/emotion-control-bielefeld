@@ -135,6 +135,8 @@ button:
   Halten. Es geht ca. 0,5 s nach dem Drücken los, der ganze Bereich dauert dann ca. 1 s. An beiden
   Enden bleibt die Helligkeit kurz stehen (oben ≈3 s, unten ≈1 s) und kehrt dann um. Die Lampen
   behalten eine Mindesthelligkeit und merken sich die Helligkeit beim Ausschalten.
+- **Mehrere Kanaltasten gleichzeitig** (ein Paket mit mehreren Bits) wirken auf alle diese Kanäle.
+  Die Komponente nutzt das, wenn mehrere Lichter zusammen geschaltet werden, z. B. über eine Alexa-Gruppe.
 - **Ein / Aus:** immer alle Lampen.
 - **Sonne / Schneeflocke:** Lichtfarbe aller Lampen; gehalten immer wärmer bzw. kälter bis zum
   Anschlag (keine Umkehr).

@@ -377,39 +377,91 @@ void LSBielefeld::request_color(float warmth) {
   this->color_pending_.since_ms = millis();
 }
 
-void LSBielefeld::apply_channel_target_(int i, bool on, float target) {
-  const uint8_t key = CHANNEL_KEYS[i];
-  ChannelModel &m = this->channels_[i];
+// Holds needed to bring one channel from its model to the target (after it is on).
+std::vector<uint32_t> LSBielefeld::plan_holds_(int i, float target) const {
+  std::vector<uint32_t> holds;
+  ChannelModel m = this->channels_[i];
   const float ramp = static_cast<float>(this->dim_time_ms_);
-  this->batch_ = true;
-  if (!on) {
-    if (m.on)
-      this->press(key, 0);
-  } else {
-    if (!m.on)
-      this->press(key, 0);  // switch on, the control restores the last brightness
-    const bool to_end = target >= 1.0f - END_THRESHOLD || target <= END_THRESHOLD;
+  const bool to_end = target >= 1.0f - END_THRESHOLD || target <= END_THRESHOLD;
+  if (to_end)
+    target = target >= 1.0f - END_THRESHOLD ? 1.0f : 0.0f;
+  const float delta = target - m.level;
+  if (fabsf(delta) < LEVEL_TOLERANCE && !(to_end && delta != 0.0f))
+    return holds;
+  const bool want_up = delta > 0.0f;
+  if (m.next_up != want_up) {
+    // The next hold would go the wrong way: run it into its end first.
+    // That also re-synchronises the model.
+    const float dist = m.next_up ? 1.0f - m.level : m.level;
+    holds.push_back(HOLD_DELAY_MS + static_cast<uint32_t>(dist * ramp) + END_MARGIN_MS);
+    simulate_dim(m, static_cast<float>(holds.back() - HOLD_DELAY_MS), ramp);
+  }
+  const float dist = fabsf(target - m.level);
+  if (dist > 0.0f) {
+    uint32_t hold = HOLD_DELAY_MS + static_cast<uint32_t>(dist * ramp);
     if (to_end)
-      target = target >= 1.0f - END_THRESHOLD ? 1.0f : 0.0f;
-    const float delta = target - m.level;
-    if (fabsf(delta) >= LEVEL_TOLERANCE || (to_end && delta != 0.0f)) {
-      const bool want_up = delta > 0.0f;
-      if (m.next_up != want_up) {
-        // The next hold would go the wrong way: run it into its end first.
-        // That also re-synchronises the model.
-        const float dist = m.next_up ? 1.0f - m.level : m.level;
-        this->press(key, HOLD_DELAY_MS + static_cast<uint32_t>(dist * ramp) + END_MARGIN_MS);
+      hold += END_MARGIN_MS;
+    holds.push_back(hold);
+  }
+  return holds;
+}
+
+// All channel requests that arrived together (e.g. an Alexa group) are sent as few
+// presses as possible: the control unit accepts several channel keys in one frame,
+// like pressing them together on the remote. Quick separate presses get lost.
+void LSBielefeld::apply_channel_targets_() {
+  uint8_t toggle = 0;
+  std::vector<uint32_t> plans[4];
+  bool any = false;
+  for (int i = 0; i < 4; i++) {
+    PendingTarget &p = this->pending_[i];
+    if (!p.active)
+      continue;
+    p.active = false;
+    any = true;
+    const ChannelModel &m = this->channels_[i];
+    if (p.on != m.on)
+      toggle |= CHANNEL_KEYS[i];  // short press toggles; the control restores the last brightness
+    if (p.on)
+      plans[i] = this->plan_holds_(i, p.value);
+  }
+  if (!any)
+    return;
+  this->batch_ = true;
+  if (toggle != 0)
+    this->press(toggle, 0);
+  // Channels with the same hold sequence are dimmed together.
+  bool done[4] = {false, false, false, false};
+  for (int i = 0; i < 4; i++) {
+    if (done[i] || plans[i].empty())
+      continue;
+    uint8_t mask = CHANNEL_KEYS[i];
+    for (int j = i + 1; j < 4; j++) {
+      // Only lamps in the same state: whether the control keeps a separate dimming
+      // direction per channel during a combined hold is not verified.
+      if (done[j] || plans[j].size() != plans[i].size() ||
+          this->channels_[j].next_up != this->channels_[i].next_up ||
+          fabsf(this->channels_[j].level - this->channels_[i].level) >= LEVEL_TOLERANCE)
+        continue;
+      bool same = true;
+      for (size_t k = 0; k < plans[i].size() && same; k++) {
+        const int32_t diff = static_cast<int32_t>(plans[i][k]) - static_cast<int32_t>(plans[j][k]);
+        same = diff >= -30 && diff <= 30;
       }
-      const float dist = fabsf(target - m.level);
-      uint32_t hold = HOLD_DELAY_MS + static_cast<uint32_t>(dist * ramp);
-      if (to_end)
-        hold += END_MARGIN_MS;
-      if (dist > 0.0f)
-        this->press(key, hold);
+      if (same) {
+        mask |= CHANNEL_KEYS[j];
+        done[j] = true;
+      }
     }
+    done[i] = true;
+    for (uint32_t hold : plans[i])
+      this->press(mask, hold);
   }
   this->batch_ = false;
-  ESP_LOGI(TAG, "Kanal %d -> %s, Helligkeit ~%.0f%%", i + 1, m.on ? "an" : "aus", m.level * 100.0f);
+  for (int i = 0; i < 4; i++)
+    if (this->lights_[i] != nullptr)
+      ESP_LOGI(TAG, "Kanal %d -> %s, Helligkeit ~%.0f%%", i + 1, this->channels_[i].on ? "an" : "aus",
+               this->channels_[i].level * 100.0f);
   this->publish_models_();
 }
 
@@ -525,12 +577,19 @@ void LSBielefeld::loop() {
   }
 
   // Requested targets, debounced so a slider being dragged does not queue many presses.
-  for (int i = 0; i < 4; i++) {
-    PendingTarget &p = this->pending_[i];
-    if (p.active && now - p.since_ms >= DEBOUNCE_MS && this->queue_.size() < 60) {
-      p.active = false;
-      this->apply_channel_target_(i, p.on, p.value);
+  // Wait until no channel request came in for DEBOUNCE_MS, then handle them together.
+  {
+    bool pending = false;
+    bool quiet = true;
+    for (const auto &p : this->pending_) {
+      if (!p.active)
+        continue;
+      pending = true;
+      if (now - p.since_ms < DEBOUNCE_MS)
+        quiet = false;
     }
+    if (pending && quiet && this->queue_.size() < 60)
+      this->apply_channel_targets_();
   }
   if (this->color_pending_.active && now - this->color_pending_.since_ms >= DEBOUNCE_MS &&
       this->queue_.size() < 60) {
