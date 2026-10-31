@@ -63,6 +63,7 @@ class LSBielefeld : public Component,
   void set_key_sensor(text_sensor::TextSensor *s) { this->key_sensor_ = s; }
   void set_dim_time_ms(uint32_t ms) { this->dim_time_ms_ = ms; }
   void set_color_time_ms(uint32_t ms) { this->color_time_ms_ = ms; }
+  void set_press_gap_ms(uint32_t ms) { this->press_gap_ms_ = ms; }
   void set_color_number(LSColorNumber *n) { this->color_number_ = n; }
 
   /// Emulate a key press on the remote. hold_ms = 0 is a short press.
@@ -134,6 +135,7 @@ class LSBielefeld : public Component,
 
   uint32_t dim_time_ms_{1000};
   uint32_t color_time_ms_{1200};
+  uint32_t press_gap_ms_{250};  // pause between two emulated presses
   ChannelModel channels_[4];
   PendingTarget pending_[4];
   float color_{1.0f};

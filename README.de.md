@@ -122,6 +122,7 @@ button:
 | | `repeats` | `6` | Wiederholungen jedes Pakets |
 | | `dim_time` | `1000ms` | Zeit der Steuerung von maximaler bis minimaler Helligkeit bei gehaltener Kanaltaste |
 | | `color_time` | `1200ms` | dasselbe für die Farbtemperatur, von kalt bis warm |
+| | `press_gap` | `250ms` | Pause zwischen direkt aufeinanderfolgenden Tastendrücken (erhöhen, falls schnell hintereinander gesendete Drücke verloren gehen) |
 | `light` | `channel` | – | Lampenkanal 1–4 |
 | `number` | – | – | Farbtemperatur aller Lampen, 0–100 % |
 | `button` | `key` | – | `sonne`, `schneeflocke`, `kanal_1` … `kanal_4`, `ein`, `aus` oder eine Liste gleichzeitig gedrückter Tasten |

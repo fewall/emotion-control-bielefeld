@@ -114,7 +114,7 @@ English (primary) and German. Naming: `NAME.md` English, `NAME.de.md` German. Cu
   re-sync the model. Colour works the same without the direction problem.
 - Requests are **debounced 300 ms** (sliders) and planned against the *predicted* model, so queued
   sequences and new requests compose.
-- Presses are queued back to back with `PRESS_GAP_MS` (250 ms) via `tx_free_at_ms_` — before that fix,
+- Presses are queued back to back with `press_gap` (option, default 250 ms) via `tx_free_at_ms_` — before that fix,
   a second press queued during a hold went out immediately and overlapped on air.
 - Feedback to the entities: `publish_models_()` → `LSChannelLight::set_estimate()` / number
   `publish_state`. **No suppress flag:** `make_call().perform()` calls `write_state` lazily, so instead

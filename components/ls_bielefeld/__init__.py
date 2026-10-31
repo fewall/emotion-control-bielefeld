@@ -18,6 +18,7 @@ CONF_DEVIATION = "deviation"
 CONF_REPEATS = "repeats"
 CONF_DIM_TIME = "dim_time"
 CONF_COLOR_TIME = "color_time"
+CONF_PRESS_GAP = "press_gap"
 
 # Bit in payload byte 1, determined from captures (order sun, snowflake, 1..4, on, off).
 KEYS = {
@@ -70,6 +71,13 @@ CONFIG_SCHEMA = (
                 cv.positive_time_period_milliseconds,
                 cv.Range(min=cv.TimePeriod(milliseconds=200), max=cv.TimePeriod(seconds=10)),
             ),
+            # Pause between two presses sent back to back (e.g. one per channel when
+            # several lights are switched at once). Raise it if the control unit
+            # misses presses that follow each other quickly.
+            cv.Optional(CONF_PRESS_GAP, default="250ms"): cv.All(
+                cv.positive_time_period_milliseconds,
+                cv.Range(max=cv.TimePeriod(seconds=5)),
+            ),
             # Same for the colour temperature (sun / snowflake held), coldest to warmest.
             cv.Optional(CONF_COLOR_TIME, default="1200ms"): cv.All(
                 cv.positive_time_period_milliseconds,
@@ -93,3 +101,4 @@ async def to_code(config):
     cg.add(var.set_repeats(config[CONF_REPEATS]))
     cg.add(var.set_dim_time_ms(config[CONF_DIM_TIME]))
     cg.add(var.set_color_time_ms(config[CONF_COLOR_TIME]))
+    cg.add(var.set_press_gap_ms(config[CONF_PRESS_GAP]))

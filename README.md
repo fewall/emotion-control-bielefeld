@@ -122,6 +122,7 @@ button:
 | | `repeats` | `6` | copies of each frame on air |
 | | `dim_time` | `1000ms` | time the control takes from max. to min. brightness while a channel key is held |
 | | `color_time` | `1200ms` | same for the colour temperature, coldest to warmest |
+| | `press_gap` | `250ms` | pause between presses sent back to back (raise it if quick successive presses are missed) |
 | `light` | `channel` | – | lamp channel 1–4 |
 | `number` | – | – | colour temperature of all lamps, 0–100 % |
 | `button` | `key` | – | `sonne`, `schneeflocke`, `kanal_1` … `kanal_4`, `ein`, `aus`, or a list of keys pressed together |

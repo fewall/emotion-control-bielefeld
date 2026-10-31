@@ -43,8 +43,6 @@ static const int RSSI_OFFSET = 72;
 static const uint32_t HOLD_STEP_MS = 500;
 static const uint32_t SHORT_RELEASE_DELAY_MS = 150;
 static const uint8_t STEP_COPIES = 3;
-// Pause between two emulated presses, so the control sees them as separate presses.
-static const uint32_t PRESS_GAP_MS = 250;
 
 // Behaviour of the control while a key is held, measured from videos:
 // it starts changing only with the second frame (~0.5 s after pressing), and when a
@@ -484,7 +482,7 @@ void LSBielefeld::press(uint8_t key, uint32_t hold_ms, bool update_lights) {
   const uint32_t release_at = start + (hold_ms > 0 ? hold_ms : SHORT_RELEASE_DELAY_MS);
   for (uint8_t i = 0; i < STEP_COPIES; i++)
     this->queue_.push_back({0x00, cnt, seq, release_at});
-  this->tx_free_at_ms_ = release_at + PRESS_GAP_MS;
+  this->tx_free_at_ms_ = release_at + this->press_gap_ms_;
 
   if (hold_ms > 0) {
     ESP_LOGI(TAG, "Sending %s (gehalten %u ms, counter %u)", key_name(key).c_str(), (unsigned) hold_ms, cnt);
