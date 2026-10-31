@@ -119,7 +119,10 @@ English (primary) and German. Naming: `NAME.md` English, `NAME.de.md` German. Cu
   same level, direction and hold plan are dimmed in one combined hold. Reason: an Alexa group sends
   three separate requests, and three separate channel presses 250 ms apart were not all executed by
   the control unit (only one lamp switched). Whether a combined hold keeps a separate direction per
-  channel is unverified, so lamps in different states are still dimmed one after another.
+  channel is unverified, so lamps in different states are never combined in one hold. Instead, when
+  several channels get the **same target** but are in different states, each is first run into the
+  upper end (combined where possible), after which all are at max with "down" next and the final
+  dimming is one combined hold (`press_grouped_`). So "Alexa, Schrank auf 50 %" leaves all lamps equal.
 - Presses are queued back to back with `press_gap` (option, default 250 ms) via `tx_free_at_ms_` — before that fix,
   a second press queued during a hold went out immediately and overlapped on air.
 - Feedback to the entities: `publish_models_()` → `LSChannelLight::set_estimate()` / number

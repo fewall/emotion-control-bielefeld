@@ -101,6 +101,7 @@ class LSBielefeld : public Component,
   void apply_key_effect_(uint8_t key, uint32_t hold_ms);
   std::vector<uint32_t> plan_holds_(int index, float target) const;
   void apply_channel_targets_();
+  void press_grouped_(uint8_t members, const float *targets);
   void apply_color_target_(float warmth);
   void publish_models_();
   void finish_remote_press_();

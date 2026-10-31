@@ -406,31 +406,13 @@ std::vector<uint32_t> LSBielefeld::plan_holds_(int i, float target) const {
   return holds;
 }
 
-// All channel requests that arrived together (e.g. an Alexa group) are sent as few
-// presses as possible: the control unit accepts several channel keys in one frame,
-// like pressing them together on the remote. Quick separate presses get lost.
-void LSBielefeld::apply_channel_targets_() {
-  uint8_t toggle = 0;
+// Presses the hold plans of the channels in `members` (bitmask of channel indices),
+// combining channels that are in the same state and need the same holds.
+void LSBielefeld::press_grouped_(uint8_t members, const float *targets) {
   std::vector<uint32_t> plans[4];
-  bool any = false;
-  for (int i = 0; i < 4; i++) {
-    PendingTarget &p = this->pending_[i];
-    if (!p.active)
-      continue;
-    p.active = false;
-    any = true;
-    const ChannelModel &m = this->channels_[i];
-    if (p.on != m.on)
-      toggle |= CHANNEL_KEYS[i];  // short press toggles; the control restores the last brightness
-    if (p.on)
-      plans[i] = this->plan_holds_(i, p.value);
-  }
-  if (!any)
-    return;
-  this->batch_ = true;
-  if (toggle != 0)
-    this->press(toggle, 0);
-  // Channels with the same hold sequence are dimmed together.
+  for (int i = 0; i < 4; i++)
+    if (members & (1 << i))
+      plans[i] = this->plan_holds_(i, targets[i]);
   bool done[4] = {false, false, false, false};
   for (int i = 0; i < 4; i++) {
     if (done[i] || plans[i].empty())
@@ -457,6 +439,70 @@ void LSBielefeld::apply_channel_targets_() {
     for (uint32_t hold : plans[i])
       this->press(mask, hold);
   }
+}
+
+// All channel requests that arrived together (e.g. an Alexa group) are sent as few
+// presses as possible: the control unit accepts several channel keys in one frame,
+// like pressing them together on the remote. Quick separate presses get lost.
+void LSBielefeld::apply_channel_targets_() {
+  uint8_t toggle = 0;
+  uint8_t dim = 0;  // channels that end up on and get a brightness target
+  float targets[4] = {0, 0, 0, 0};
+  bool any = false;
+  for (int i = 0; i < 4; i++) {
+    PendingTarget &p = this->pending_[i];
+    if (!p.active)
+      continue;
+    p.active = false;
+    any = true;
+    if (p.on != this->channels_[i].on)
+      toggle |= CHANNEL_KEYS[i];  // short press toggles; the control restores the last brightness
+    if (p.on) {
+      dim |= 1 << i;
+      targets[i] = p.value;
+    }
+  }
+  if (!any)
+    return;
+  this->batch_ = true;
+  if (toggle != 0)
+    this->press(toggle, 0);
+
+  // Channels asked for the same brightness are brought to the same state first, so the
+  // final dimming is one combined hold and they end up equal ("Alexa, Schrank auf 50 %").
+  uint8_t remaining = dim;
+  while (remaining != 0) {
+    int first = 0;
+    while (!(remaining & (1 << first)))
+      first++;
+    uint8_t group = 0;
+    for (int j = first; j < 4; j++)
+      if ((remaining & (1 << j)) && fabsf(targets[j] - targets[first]) < LEVEL_TOLERANCE)
+        group |= 1 << j;
+    remaining &= ~group;
+
+    bool same_state = true;
+    bool needs_change = false;
+    for (int j = 0; j < 4; j++) {
+      if (!(group & (1 << j)))
+        continue;
+      targets[j] = targets[first];
+      const ChannelModel &a = this->channels_[j];
+      const ChannelModel &b = this->channels_[first];
+      if (a.next_up != b.next_up || fabsf(a.level - b.level) >= LEVEL_TOLERANCE)
+        same_state = false;
+      if (!this->plan_holds_(j, targets[j]).empty())
+        needs_change = true;
+    }
+    if (!same_state && needs_change) {
+      // Run every lamp of the group into the upper end (each on its own if needed).
+      // Afterwards all are at max with "down" next.
+      float top[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+      this->press_grouped_(group, top);
+    }
+    this->press_grouped_(group, targets);
+  }
+
   this->batch_ = false;
   for (int i = 0; i < 4; i++)
     if (this->lights_[i] != nullptr)

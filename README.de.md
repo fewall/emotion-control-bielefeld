@@ -137,6 +137,8 @@ button:
   behalten eine Mindesthelligkeit und merken sich die Helligkeit beim Ausschalten.
 - **Mehrere Kanaltasten gleichzeitig** (ein Paket mit mehreren Bits) wirken auf alle diese Kanäle.
   Die Komponente nutzt das, wenn mehrere Lichter zusammen geschaltet werden, z. B. über eine Alexa-Gruppe.
+  Lampen mit gleicher Zielhelligkeit werden erst auf denselben Stand gebracht (an den oberen Anschlag)
+  und dann gemeinsam gedimmt.
 - **Ein / Aus:** immer alle Lampen.
 - **Sonne / Schneeflocke:** Lichtfarbe aller Lampen; gehalten immer wärmer bzw. kälter bis zum
   Anschlag (keine Umkehr).
